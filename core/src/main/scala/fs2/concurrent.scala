@@ -81,4 +81,26 @@ object concurrent {
       }.onFinalize { killSignal.set(true) }
     } yield o
   }
+
+  def reorder[A, F[_]](startVal: Long = 0): Pipe[F, (A, Long), A] = {
+    def go(nextVal: Long, v: Vector[(A, Long)]): Pipe[F, (A, Long), A] = {
+      Stream.receive1[(A, Long), A] { l =>
+        if (l._2 == nextVal) {
+          val sorted: Vector[(A, Long)] = v.sortBy(_._2)
+          val contiguous: Vector[(A, Long)] = sorted.foldLeft(Vector(l))((acc, i) => if (i._2 == acc.head._2 + 1) i +: acc else acc).reverse
+          val all: Process1[(A, Long), A] = Process.emitAll(contiguous.map(_._1))
+          all ++ go(contiguous.map(_._2).max + 1, sorted.filterNot(contiguous.contains))
+        }
+        else
+          go(nextVal, l +: v)
+      }
+    }
+    go(startVal, Vector.empty)
+  }
+
+  def orderedMergeN[A, B, F[_]](maxOpen: Int)(p: Stream[F, A])(f: A => Process[F, B])(implicit async:Async[F]): Stream[F, B] = {
+    val tagged: Stream[F, (A, Long)] = p.zip(Stream.supply(0))
+    val b: Stream[F, Stream[F, (B, Long)]] = tagged map (a => f(a._1).map(b => (b, a._2)))
+    join(maxOpen)(b) |> reorder(0)
+  }
 }
