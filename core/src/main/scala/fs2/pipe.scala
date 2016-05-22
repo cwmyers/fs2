@@ -251,7 +251,7 @@ object pipe {
    *
    * Works in a chunky fashion, and creates a `Chunk.indexedSeq` for each converted chunk.
    */
-  def scan[F[_],I,O](z: O)(f: (O, I) => O): Stream[F,I] => Stream[F,O] = {
+  def scan[F[_],I,O](z: O)(f: (O, I) => O): Pipe[F,I,O] = {
     _ pull (_scan0(z)(f))
   }
 
@@ -339,7 +339,7 @@ object pipe {
     drop(1)
 
   /** Emit the first `n` elements of the input `Handle` and return the new `Handle`. */
-  def take[F[_],I](n: Long): Stream[F,I] => Stream[F,I] =
+  def take[F[_],I](n: Long): Pipe[F,I,I] =
     _ pull Pull.take(n)
 
   /** Emits the last `n` elements of the input. */

@@ -1,5 +1,7 @@
 package fs2
 
+import fs2.Stream.Handle
+
 import _root_.scalaz.concurrent.Task
 import _root_.scalaz.stream.Process
 
@@ -99,7 +101,8 @@ object concurrent {
 
   def reorder[A, F[_]](startVal: Long = 0): Pipe[F, (A, Long), A] = {
     def go(nextVal: Long, v: Vector[(A, Long)]): Pipe[F, (A, Long), A] = {
-      Stream.receive1[(A, Long), A] { l =>
+      _ pull { h =>
+        val await: Pull[F, Nothing, Step[(A, Long), Handle[F, (A, Long)]]] = h.await1
         if (l._2 == nextVal) {
           val sorted: Vector[(A, Long)] = v.sortBy(_._2)
           val contiguous: Vector[(A, Long)] = sorted.foldLeft(Vector(l))((acc, i) => if (i._2 == acc.head._2 + 1) i +: acc else acc).reverse
