@@ -1,5 +1,8 @@
 package fs2
 
+import _root_.scalaz.concurrent.Task
+import _root_.scalaz.stream.Process
+
 
 object concurrent {
 
@@ -82,6 +85,18 @@ object concurrent {
     } yield o
   }
 
+  /**
+    * A supply of `Long` values, starting with `initial`.
+    * Each read is guaranteed to return a value which is unique
+    * across all threads reading from this `supply`.
+    */
+  def supply[F[_]](initial: Long)(implicit async: Async[F]): Stream[F, Long] = {
+    import java.util.concurrent.atomic.AtomicLong
+    val l = new AtomicLong(initial)
+    Stream.repeatEval { async.delay { l.getAndIncrement }}
+  }
+
+
   def reorder[A, F[_]](startVal: Long = 0): Pipe[F, (A, Long), A] = {
     def go(nextVal: Long, v: Vector[(A, Long)]): Pipe[F, (A, Long), A] = {
       Stream.receive1[(A, Long), A] { l =>
@@ -99,8 +114,8 @@ object concurrent {
   }
 
   def orderedMergeN[A, B, F[_]](maxOpen: Int)(p: Stream[F, A])(f: A => Process[F, B])(implicit async:Async[F]): Stream[F, B] = {
-    val tagged: Stream[F, (A, Long)] = p.zip(Stream.supply(0))
+    val tagged: Stream[F, (A, Long)] = p.zip(supply(0))
     val b: Stream[F, Stream[F, (B, Long)]] = tagged map (a => f(a._1).map(b => (b, a._2)))
-    join(maxOpen)(b) |> reorder(0)
+    join(maxOpen)(b) through reorder(0)
   }
 }
